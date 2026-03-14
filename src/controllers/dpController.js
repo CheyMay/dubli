@@ -14,37 +14,46 @@ async function handleDigitalPipelineWebhook(req, res) {
     const pipelineId = data?.pipeline_id || null;
     const statusId = data?.status_id || null;
 
-    // Это место зависит от фактического payload твоего webhook.
-    // Если referer/subdomain приходит иначе — надо адаптировать по реальному телу запроса.
-    const referer =
+    // Подстрой под фактический payload / свою схему сохранения
+    const accountId =
+      payload?.account_id ||
+      payload?.account?.id ||
+      null;
+
+    const subdomain =
+      payload?.subdomain ||
       payload?.account?.subdomain ||
-      payload?.referer ||
       null;
 
     logger.info("DP webhook received", {
       leadId,
       pipelineId,
       statusId,
-      referer
+      accountId,
+      subdomain
     });
 
-    if (!leadId || !referer) {
-      logger.warn("Webhook missing required fields", { payload });
+    if (!leadId) {
+      logger.warn("DP webhook without leadId", { payload });
       return;
     }
 
     await runLeadDuplicateScenario({
-      referer,
+      accountId,
+      subdomain,
       leadId,
       pipelineId,
-      statusId,
-      rawPayload: payload
+      statusId
     });
   } catch (error) {
     logger.error("DP controller failed", {
       message: error.message,
       status: error.response?.status || null,
-      data: error.response?.data || null
+      data: error.response?.data || null,
+      url: error.config?.url || null,
+      baseURL: error.config?.baseURL || null,
+      method: error.config?.method || null,
+      stack: error.stack
     });
   }
 }
