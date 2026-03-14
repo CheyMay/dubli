@@ -2,7 +2,6 @@ const { runLeadDuplicateScenario } = require("../services/duplicates/leadDuplica
 const { logger } = require("../utils/logger");
 
 async function handleDigitalPipelineWebhook(req, res) {
-  // amoCRM ожидает быстрый ответ
   res.status(200).send("ok");
 
   try {
@@ -11,9 +10,16 @@ async function handleDigitalPipelineWebhook(req, res) {
     const event = payload?.event || {};
     const data = event?.data || {};
 
-    const leadId = data?.id;
-    const pipelineId = data?.pipeline_id;
-    const statusId = data?.status_id;
+    const leadId = data?.id || null;
+    const pipelineId = data?.pipeline_id || null;
+    const statusId = data?.status_id || null;
+
+    logger.info("DP webhook received", {
+      leadId,
+      pipelineId,
+      statusId,
+      payload
+    });
 
     if (!leadId) {
       logger.warn("DP webhook without leadId", { payload });
@@ -29,6 +35,11 @@ async function handleDigitalPipelineWebhook(req, res) {
   } catch (error) {
     logger.error("DP controller failed", {
       message: error.message,
+      status: error.response?.status || null,
+      data: error.response?.data || null,
+      url: error.config?.url || null,
+      baseURL: error.config?.baseURL || null,
+      method: error.config?.method || null,
       stack: error.stack
     });
   }
