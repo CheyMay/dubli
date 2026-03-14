@@ -1,61 +1,87 @@
-// Временная заглушка вместо БД.
-// Потом заменить на PostgreSQL / Redis / файл / любую нормальную БД.
-const accountsStore = new Map();
+const accountStore = new Map();
+const leadScenarioStore = new Map();
 
-/**
- * Сохраняем контекст аккаунта после установки/авторизации.
- * key: referer или subdomain
- */
-async function saveAccountContext({
-  referer,
-  subdomain,
-  accessToken,
-  refreshToken,
-  expiresAt
-}) {
-  accountsStore.set(referer, {
-    referer,
+function buildAccountKey({ accountId, subdomain }) {
+  if (accountId) return `account:${accountId}`;
+  if (subdomain) return `subdomain:${subdomain}`;
+  throw new Error("accountId or subdomain is required");
+}
+
+const settingsService = {
+  async saveIntegrationContext({
+    accountId,
     subdomain,
     accessToken,
-    refreshToken,
-    expiresAt
-  });
+    refreshToken = null,
+    settings = {}
+  }) {
+    const key = buildAccountKey({ accountId, subdomain });
 
-  return true;
-}
+    const value = {
+      accountId: accountId || null,
+      subdomain,
+      accessToken,
+      refreshToken,
+      settings
+    };
 
-/**
- * Получаем контекст аккаунта для backend-обработки webhook.
- */
-async function getIntegrationContext({ referer }) {
-  const account = accountsStore.get(referer);
+    accountStore.set(key, value);
+    return value;
+  },
 
-  if (!account) {
-    throw new Error(`Account context not found for referer: ${referer}`);
-  }
+  async getIntegrationContext({ accountId, subdomain }) {
+    const key = buildAccountKey({ accountId, subdomain });
+    const context = accountStore.get(key);
 
-  return account;
-}
+    if (!context) {
+      throw new Error(`Integration context not found for key: ${key}`);
+    }
 
-/**
- * Заглушка настроек сценария дублей.
- * Потом сюда можно привязать account_id / pipeline_id / status_id.
- */
-async function getLeadScenarioSettings({ referer, pipelineId, statusId }) {
-  return {
-    enabled: true,
-    referer,
+    return context;
+  },
+
+  async saveLeadScenarioSettings({
+    accountId,
+    subdomain,
     pipelineId,
     statusId,
-    primary_lead_strategy: "oldest",
-    field_value_strategy: "primary_first"
-  };
-}
+    settings
+  }) {
+    const accountKey = buildAccountKey({ accountId, subdomain });
+    const key = `${accountKey}:pipeline:${pipelineId || "any"}:status:${statusId || "any"}`;
 
-module.exports = {
-  settingsService: {
-    saveAccountContext,
-    getIntegrationContext,
-    getLeadScenarioSettings
+    leadScenarioStore.set(key, {
+      enabled: true,
+      primary_lead_strategy: "oldest",
+      field_value_strategy: "primary_first",
+      ...settings
+    });
+
+    return leadScenarioStore.get(key);
+  },
+
+  async getLeadScenarioSettings({
+    accountId,
+    subdomain,
+    pipelineId,
+    statusId
+  }) {
+    const accountKey = buildAccountKey({ accountId, subdomain });
+
+    const exactKey = `${accountKey}:pipeline:${pipelineId || "any"}:status:${statusId || "any"}`;
+    const pipelineAnyStatusKey = `${accountKey}:pipeline:${pipelineId || "any"}:status:any`;
+    const fallbackKey = `${accountKey}:pipeline:any:status:any`;
+
+    return (
+      leadScenarioStore.get(exactKey) ||
+      leadScenarioStore.get(pipelineAnyStatusKey) ||
+      leadScenarioStore.get(fallbackKey) || {
+        enabled: true,
+        primary_lead_strategy: "oldest",
+        field_value_strategy: "primary_first"
+      }
+    );
   }
 };
+
+module.exports = { settingsService };
