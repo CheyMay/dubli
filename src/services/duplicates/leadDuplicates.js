@@ -67,8 +67,17 @@ async function collectDuplicateLeadCandidates({ client, triggerLeadId }) {
   return leads;
 }
 
-async function runLeadDuplicateScenario({ leadId, pipelineId, statusId }) {
-  const integration = await settingsService.getIntegrationContext();
+async function runLeadDuplicateScenario({
+  accountId,
+  subdomain,
+  leadId,
+  pipelineId,
+  statusId
+}) {
+  const integration = await settingsService.getIntegrationContext({
+    accountId,
+    subdomain
+  });
 
   const client = createAmoClient({
     subdomain: integration.subdomain,
@@ -76,12 +85,20 @@ async function runLeadDuplicateScenario({ leadId, pipelineId, statusId }) {
   });
 
   const settings = await settingsService.getLeadScenarioSettings({
+    accountId: integration.accountId,
+    subdomain: integration.subdomain,
     pipelineId,
     statusId
   });
 
   if (!settings.enabled) {
-    logger.info("Lead duplicate scenario disabled", { leadId, pipelineId, statusId });
+    logger.info("Lead duplicate scenario disabled", {
+      leadId,
+      pipelineId,
+      statusId,
+      accountId: integration.accountId,
+      subdomain: integration.subdomain
+    });
     return;
   }
 
@@ -98,7 +115,9 @@ async function runLeadDuplicateScenario({ leadId, pipelineId, statusId }) {
   logger.info("Lead merge plan", {
     found: plan.found,
     primaryId: plan.primary?.id || null,
-    secondaryIds: plan.secondary?.map((x) => x.id) || []
+    secondaryIds: plan.secondary?.map((x) => x.id) || [],
+    accountId: integration.accountId,
+    subdomain: integration.subdomain
   });
 
   return plan;
